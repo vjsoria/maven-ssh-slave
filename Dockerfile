@@ -1,4 +1,4 @@
-# The MIT License
+#  MIT License
 #
 #  Copyright (c) 2015, CloudBees, Inc.
 #
@@ -20,10 +20,36 @@
 #  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 #  THE SOFTWARE.
 
-FROM jenkinsci/ssh-slave
-LABEL MAINTAINER="Victor Soria <vjsoria@gmail.com>"
+FROM maven:3.5.2-jdk-8
+LABEL MAINTAINER="Nicolas De Loof <nicolas.deloof@gmail.com>"
 
-# setup maven
-RUN apt-get update \
-    && apt-get install -y maven \
-    && apt-get clean
+ARG user=jenkins
+ARG group=jenkins
+ARG uid=1000
+ARG gid=1000
+ARG JENKINS_AGENT_HOME=/home/${user}
+
+ENV JENKINS_AGENT_HOME ${JENKINS_AGENT_HOME}
+
+RUN groupadd -g ${gid} ${group} \
+    && useradd -d "${JENKINS_AGENT_HOME}" -u "${uid}" -g "${gid}" -m -s /bin/bash "${user}"
+
+    # setup SSH server
+    RUN apt-get update \
+        && apt-get install --no-install-recommends -y openssh-server \
+            && apt-get clean
+            RUN sed -i 's/#PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
+            RUN sed -i 's/#RSAAuthentication.*/RSAAuthentication yes/' /etc/ssh/sshd_config
+            RUN sed -i 's/#PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
+            RUN sed -i 's/#SyslogFacility.*/SyslogFacility AUTH/' /etc/ssh/sshd_config
+            RUN sed -i 's/#LogLevel.*/LogLevel INFO/' /etc/ssh/sshd_config
+            RUN mkdir /var/run/sshd
+
+            VOLUME "${JENKINS_AGENT_HOME}" "/tmp" "/run" "/var/run"
+            WORKDIR "${JENKINS_AGENT_HOME}"
+
+            COPY setup-sshd /usr/local/bin/setup-sshd
+
+            EXPOSE 22
+
+            ENTRYPOINT ["setup-sshd"]
